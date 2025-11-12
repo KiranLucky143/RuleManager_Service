@@ -1,25 +1,25 @@
-name: CI - Build & Push Docker to ECR (RuleManager)
+name: CI - Build & Push RuleManager to ECR
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
   contents: read
+  id-token: write
 
 env:
-  AWS_REGION: ap-south-1
   ACCOUNT_ID: 328705154792
-  ECR_REPO: mtech-mid-rulemanager
-  IMAGE_TAG: latest
+  REGION: ap-south-1
+  IMAGE_REPO: ${{ env.ACCOUNT_ID }}.dkr.ecr.${{ env.REGION }}.amazonaws.com/mtech-mid-rulemanager
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout source
         uses: actions/checkout@v4
 
       - name: Configure AWS credentials
@@ -27,16 +27,18 @@ jobs:
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Login to Amazon ECR
-        id: ecr-login
+      - name: Verify credentials
+        run: aws sts get-caller-identity
+
+      - name: Login to ECR
         uses: aws-actions/amazon-ecr-login@v1
 
-      - name: Build, tag, and push image to ECR
-        uses: docker/build-push-action@v4
-        with:
-          context: .
-          push: true
-          tags: ${{ env.ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}:${{ env.IMAGE_TAG }}
-          file: ./Dockerfile
+      - name: Build Docker image
+        run: |
+          docker build -t mtech-mid-rulemanager:latest .
+          docker tag mtech-mid-rulemanager:latest ${{ env.IMAGE_REPO }}:latest
+
+      - name: Push to ECR
+        run: docker push ${{ env.IMAGE_REPO }}:latest
